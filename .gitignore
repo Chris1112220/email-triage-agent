@@ -3,3 +3,4 @@ __pycache__/
 .env
 token.json
 credentials.json
+.pytest_cache/
