@@ -15,3 +15,13 @@ def test_phishing_is_spam_with_no_draft():
 
 def test_recruiter_is_job():
     assert run(FAKE_EMAILS[0])["category"] == "job"
+
+def test_no_draft_for_automated_sender():
+    # Pretend classify got it WRONG and labeled a robot email "needs_reply"
+    from app.nodes import draft
+    state = {
+        "sender": "Google <no-reply@accounts.google.com>",
+        "subject": "Security alert",
+        "category": "needs_reply",
+    }
+    assert draft(state)["draft"] is None

@@ -31,7 +31,17 @@ def label(state: EmailState) -> dict:
     return {"label": LABELS.get(state["category"], "Needs Reply")}
 
 
+# Guardrail: never draft a reply to automated senders, no matter what classify says.
+NO_REPLY_PATTERNS = ("no-reply", "noreply", "donotreply", "do-not-reply", "mailer-daemon")
+
+
+def is_automated_sender(sender: str) -> bool:
+    return any(p in sender.lower() for p in NO_REPLY_PATTERNS)
+
+
 def draft(state: EmailState) -> dict:
+    if is_automated_sender(state["sender"]):
+        return {"draft": None}
     if state["category"] not in ("job", "needs_reply"):
         return {"draft": None}
     reply = f"Hi,\n\nThanks for your email about \"{state['subject']}\". I'll get back to you shortly.\n\nBest,\nChris"
