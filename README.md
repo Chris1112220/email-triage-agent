@@ -70,14 +70,14 @@ pip install -r requirements.txt
 # add GEMINI_API_KEY=... to .env, and Gmail OAuth credentials.json
 python -m app.run_real            # triage the 10 newest emails
 python -m app.run_eval            # score against the eval set
-pytest -q                         # 7 tests, no API key needed
+pytest -q                         # 10 tests, no API key needed
 ```
 
 Runs daily at 8 AM via Windows Task Scheduler, logging to `logs/`.
 
 ## Tests and CI
 
-7 pytest tests cover the approval gate, phishing, recruiter emails, automated senders, and the API (health, guardrail, 422 validation). GitHub Actions runs them on every push. With no API key in CI, the keyword fallback keeps the tests free and deterministic.
+10 pytest tests cover the approval gate, phishing, recruiter emails, automated senders, the model fallback chain (429 and 503 errors, junk answers), and the API (health, guardrail, 422 validation). GitHub Actions runs them on every push. With no API key in CI, the keyword fallback keeps the tests free and deterministic.
 
 ## Roadmap
 
