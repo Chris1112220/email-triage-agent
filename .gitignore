@@ -4,3 +4,5 @@ __pycache__/
 token.json
 credentials.json
 .pytest_cache/
+
+evals/
