@@ -1,0 +1,14 @@
+# Never put secrets or real emails in the image.
+.env
+token.json
+credentials.json
+evals/
+logs/
+# Not needed inside the container.
+.venv/
+.git/
+.github/
+.pytest_cache/
+**/__pycache__/
+tests/
+**/*.pyc
