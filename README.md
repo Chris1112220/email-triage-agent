@@ -75,12 +75,33 @@ pytest -q                         # 10 tests, no API key needed
 
 Runs daily at 8 AM via Windows Task Scheduler, logging to `logs/`.
 
+## Docker and Cloud Run
+
+The API runs in a Docker container and is deployed to Google Cloud Run.
+
+```bash
+docker build -t email-triage .
+docker run -p 8080:8080 --env-file .env email-triage
+```
+
+`.dockerignore` keeps `.env`, `token.json`, `credentials.json`, and real emails out of the image. The key is passed in at runtime.
+
+```bash
+gcloud run deploy email-triage --source . --region us-east1 \
+  --set-secrets GEMINI_API_KEY=gemini-api-key:latest \
+  --max-instances 1 --min-instances 0
+```
+
+- Cloud Build builds the image from the Dockerfile and stores it in Artifact Registry.
+- The Gemini key lives in Secret Manager and is injected when the container starts.
+- Scales to zero when idle and is capped at one instance, with a billing budget alert, so it costs about nothing.
 ## Tests and CI
 
 10 pytest tests cover the approval gate, phishing, recruiter emails, automated senders, the model fallback chain (429 and 503 errors, junk answers), and the API (health, guardrail, 422 validation). GitHub Actions runs them on every push. With no API key in CI, the keyword fallback keeps the tests free and deterministic.
 
 ## Roadmap
 
+- ~~Containerize and deploy to Cloud Run~~ (done)
 - Apply labels in Gmail (currently read-only)
 - Only process new emails since the last run
 - Human approval UI for drafts
