@@ -41,8 +41,8 @@ def test_all_models_fail_uses_keyword_rules(monkeypatch):
     assert result == {"category": nodes.keyword_classify(EMAIL)}
 
 
-def test_junk_answer_becomes_needs_reply(monkeypatch):
-    # Gemini answers with something that isn't a category. Safe default: a human sees it.
+def test_junk_answer_becomes_other(monkeypatch):
+    # Gemini answers with something that isn't a category. Safe default: the Other catch-all.
     monkeypatch.setenv("GEMINI_API_KEY", "fake-key")
 
     class FakeResponse:
@@ -57,4 +57,4 @@ def test_junk_answer_becomes_needs_reply(monkeypatch):
             self.models = FakeModels()
 
     monkeypatch.setattr(nodes.genai, "Client", FakeClient)
-    assert nodes.gemini_classify(EMAIL, nodes.MODELS[0]) == "needs_reply"
+    assert nodes.gemini_classify(EMAIL, nodes.MODELS[0]) == "other"

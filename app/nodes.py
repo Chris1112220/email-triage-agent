@@ -10,13 +10,16 @@ from app.state import EmailState
 
 load_dotenv()  # reads .env so GEMINI_API_KEY is available
 
-CATEGORIES = ("job", "bill", "promo", "spam", "needs_reply")
+# Business inbox categories. "other" is the catch-all when the model is unsure.
+CATEGORIES = (
+    "client", "needs_reply", "bill", "receipt", "alert",
+    "account", "job", "promo", "spam", "other",
+)
+CATEGORY_LIST = ", ".join(CATEGORIES)  # used in the prompts so they never go out of sync
 # Fallback chain: try each model in order. Each has its own free daily quota.
 MODELS = ("gemini-3.1-flash-lite", "gemini-3.8-flash", "gemini-3.7-flash")  # fastest first
 
-# TODO (Chris): type the instruction Gemini follows. Tell it the 5 categories
-# and to answer with ONE word only.
-PROMPT = "Classify this email into exactly one category: job, bill, promo, spam, or needs_reply. Answer with one word only."  # single-email path; DEFINITIONS added below
+PROMPT = f"Classify this email into exactly one category: {CATEGORY_LIST}. Answer with the category only."  # single-email path; DEFINITIONS added below
 
 # TODO (Chris): set this so the same email always gets the same answer.
 TEMPERATURE = 0
@@ -32,10 +35,16 @@ def keyword_classify(state: EmailState) -> str:
         return "spam"
     if "recruiter" in sender or "hr@" in sender:
         return "job"
-    if "bill" in text or "payment" in text:
+    if "new login" in text or "sign-in" in text or "maintenance" in text or "security" in text:
+        return "alert"
+    if "receipt" in text or "payment received" in text or "received your payment" in text:
+        return "receipt"
+    if "invoice" in text or "bill" in text or "payment" in text:
         return "bill"
-    if "deals@" in sender or "newsletter" in sender or "noreply" in sender:
+    if "deals@" in sender or "newsletter" in sender:
         return "promo"
+    if "noreply" in sender or "no-reply" in sender:
+        return "other"
     return "needs_reply"
 
 
@@ -50,8 +59,8 @@ def gemini_classify(state: EmailState, model: str) -> str:
     raw = response.text or ""
     answer = raw.strip().lower().strip(".*`\"' ")  # clean "Promo." or "**promo**" down to "promo"
     if answer not in CATEGORIES:
-        print(f"  [guardrail] Gemini said {raw!r}, not a category -> needs_reply")
-        return "needs_reply"  # guardrail: unknown answer -> safe default
+        print(f"  [guardrail] Gemini said {raw!r}, not a category -> other")
+        return "other"  # guardrail: unknown answer -> catch-all, never a forced guess
     return answer
 
 
@@ -79,16 +88,21 @@ def classify(state: EmailState) -> dict:
 
 DEFINITIONS = (
     "Category definitions:\n"
+    "- client: a real person asking about Chris's automation services, a quote, or a project\n"
+    "- needs_reply: any other real person who is waiting on an answer from Chris\n"
+    "- bill: money Chris owes: an invoice, a payment due, a failed charge, or a subscription about to lapse for non-payment\n"
+    "- receipt: a payment already made: receipts and payment confirmations, nothing to do\n"
+    "- alert: automated notices: new logins, password resets, security warnings, data-sharing notices, maintenance or outage notices\n"
+    "- account: sign-up confirmations, plan changes, and admin or settings changes for tools Chris uses\n"
     "- job: recruiters, interviews, job applications, offers\n"
-    "- bill: an actual charge, invoice, receipt, or payment due\n"
-    "- promo: marketing, newsletters, tips, and plan or product updates\n"
+    "- promo: marketing, newsletters, tips, gift guides, event announcements, free-credit offers\n"
     "- spam: scams, phishing, or junk only\n"
-    "- needs_reply: anything Chris must read or act on, including security alerts, "
-    "new logins, and account changes"
+    "- other: anything that fits none of the above, or when unsure\n"
+    "An automated notice is never needs_reply or client; those are only for emails from real people."
 )
 
 BATCH_PROMPT = (
-    "Classify each email below into exactly one category: job, bill, promo, spam, or needs_reply. "
+    f"Classify each email below into exactly one category: {CATEGORY_LIST}. "
     "Return ONLY a JSON list of category strings, one per email, in the same order. "
     'Example for 3 emails: ["promo", "bill", "needs_reply"]\n\n' + DEFINITIONS
 )
@@ -112,7 +126,7 @@ def gemini_classify_batch(emails: list, model: str) -> list:
     if not isinstance(answers, list) or len(answers) != len(emails):
         raise ValueError(f"expected {len(emails)} answers, got {answers!r}")  # bad shape -> try next model
     cleaned = [str(a).strip().lower() for a in answers]
-    return [a if a in CATEGORIES else "needs_reply" for a in cleaned]  # guardrail per email
+    return [a if a in CATEGORIES else "other" for a in cleaned]  # guardrail per email  # guardrail per email
 
 
 def classify_batch(emails: list) -> list:
@@ -132,16 +146,21 @@ def classify_batch(emails: list) -> list:
 
 
 LABELS = {
+    "client": "Clients & Leads",
+    "needs_reply": "Needs Reply",
+    "bill": "Bills & Invoices",
+    "receipt": "Receipts",
+    "alert": "Alerts & Security",
+    "account": "Accounts & Tools",
     "job": "Job Applications",
-    "bill": "Bills",
     "promo": "Promotions & Newsletters",
     "spam": "Spam",
-    "needs_reply": "Needs Reply",
+    "other": "Other",
 }
 
 
 def label(state: EmailState) -> dict:
-    return {"label": LABELS.get(state["category"], "Needs Reply")}
+    return {"label": LABELS.get(state["category"], "Other")}
 
 
 # Guardrail: never draft a reply to automated senders, no matter what classify says.
@@ -155,7 +174,7 @@ def is_automated_sender(sender: str) -> bool:
 def draft(state: EmailState) -> dict:
     if is_automated_sender(state["sender"]):
         return {"draft": None}
-    if state["category"] not in ("job", "needs_reply"):
+    if state["category"] not in ("client", "job", "needs_reply"):  # only emails from real people
         return {"draft": None}
     reply = f"Hi,\n\nThanks for your email about \"{state['subject']}\". I'll get back to you shortly.\n\nBest,\nChris"
     return {"draft": reply}

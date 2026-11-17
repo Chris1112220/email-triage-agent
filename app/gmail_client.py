@@ -5,8 +5,9 @@ from google_auth_oauthlib.flow import InstalledAppFlow
 from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
-# Read-only: this key can never send, delete, or change mail.
-SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
+# Modify scope so the agent can ADD labels. There is no send scope, so it can never send.
+# Code guardrail (app/gmail_labels.py): the only write is adding labels.
+SCOPES = ["https://www.googleapis.com/auth/gmail.modify"]
 
 
 def get_service():
@@ -48,10 +49,10 @@ def _get_body(payload):
     return ""
 
 
-def fetch_emails(n=5):
-    """Pull the n newest emails and shape each one like EmailState."""
+def fetch_emails(n=5, query=None):
+    """Pull up to n newest emails (optionally matching a Gmail search) shaped like EmailState."""
     service = get_service()
-    result = service.users().messages().list(userId="me", maxResults=n).execute()
+    result = service.users().messages().list(userId="me", maxResults=n, q=query).execute()
     emails = []
     for msg in result.get("messages", []):
         full = service.users().messages().get(userId="me", id=msg["id"], format="full").execute()
